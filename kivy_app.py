@@ -4,6 +4,13 @@ Touchscreen UI for controlling the Govee devices.
 Reads live state from DeviceManager's background poller (never blocks
 on network I/O) and sends taps through as non-blocking commands.
 """
+from kivy.config import Config
+# Rotate the whole app 90 degrees clockwise to match the Touch Display 2's
+# landscape mounting. This must be set before any other kivy import that
+# might trigger window creation. If the screen comes out upside-down or
+# mirrored, change this to '270' instead.
+Config.set('graphics', 'rotation', '90')
+
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
