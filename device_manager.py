@@ -10,7 +10,7 @@ Runs a background thread that:
   - drains a command queue so on/off/brightness taps also never block
     the UI thread (matters most for cloud calls, which can take ~1-2s)
 
-Set MOCK_MODE = True to develop/test the whole UI without any real
+Set MOCK_MODE = False to develop/test the whole UI without any real
 hardware - mock devices behave like real ones, including going offline
 and reconnecting, so you can build and test the wall-switch handling
 before your hardware arrives.
@@ -23,7 +23,7 @@ import time
 import govee_lan
 import govee_cloud
 
-MOCK_MODE = True  # flip to False once you have real hardware configured
+MOCK_MODE = False  # flip to False once you have real hardware configured
 
 # Consecutive missed polls before a device is marked offline. Multiple
 # misses avoid flapping the UI on a single dropped packet.
@@ -101,6 +101,9 @@ class DeviceManager:
     def set_brightness(self, device_id, pct):
         self._commands.put((device_id, "set_brightness", {"pct": pct}))
 
+    def set_color(self, device_id, r, g, b):
+        self._commands.put((device_id, "set_color", {"color": (r, g, b)}))
+
     # --- background thread ---------------------------------------------------
 
     def _run(self):
@@ -139,6 +142,9 @@ class DeviceManager:
                     govee_lan.turn_off(device.ip)
                 elif action == "set_brightness":
                     govee_lan.set_brightness(device.ip, kwargs["pct"])
+                elif action == "set_color":
+                    r, g, b = kwargs["color"]
+                    govee_lan.set_color(device.ip, r, g, b)
             else:  # cloud
                 if action == "turn_on":
                     govee_cloud.turn_on(device.device_id, device.sku)
@@ -146,6 +152,26 @@ class DeviceManager:
                     govee_cloud.turn_off(device.device_id, device.sku)
                 elif action == "set_brightness":
                     govee_cloud.set_brightness(device.device_id, device.sku, kwargs["pct"])
+                # Color over the cloud API isn't wired up yet - add a
+                # govee_cloud.set_color() when that device is ready for it.
+
+            # Optimistically update our local view of the state immediately,
+            # rather than waiting for the next poll cycle (up to several
+            # seconds away) to confirm it. Without this, the UI briefly
+            # shows stale state right after a command - most visible as a
+            # slider snapping back to its old position after a drag.
+            with self._lock:
+                s = self.state[device_id]
+                if action == "turn_on":
+                    s.on = True
+                elif action == "turn_off":
+                    s.on = False
+                elif action == "set_brightness":
+                    s.brightness = kwargs["pct"]
+                elif action == "set_color":
+                    s.color = kwargs["color"]
+                s.online = True
+                s.consecutive_misses = 0
         except Exception as exc:
             # Network hiccup on a command - not fatal, next poll will
             # reconcile actual state. Log it however you prefer.
@@ -193,6 +219,8 @@ class DeviceManager:
                 s.on = False
             elif action == "set_brightness":
                 s.brightness = kwargs["pct"]
+            elif action == "set_color":
+                s.color = kwargs["color"]
             s.online = True
             s.consecutive_misses = 0
 

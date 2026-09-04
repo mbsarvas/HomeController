@@ -21,20 +21,34 @@ from kivy.uix.slider import Slider
 
 from device_manager import Device, DeviceManager
 
+# Simple color palette shown as tap-to-set swatches on any device with
+# supports_color=True. Each entry is (name, (r, g, b)) - name is unused in
+# the UI itself (buttons are just solid color blocks) but useful if you
+# want to add labels or tooltips later.
+COLOR_PRESETS = [
+    ("Warm White", (255, 180, 100)),
+    ("Cool White", (255, 255, 255)),
+    ("Red", (255, 0, 0)),
+    ("Orange", (255, 120, 0)),
+    ("Green", (0, 200, 0)),
+    ("Blue", (0, 90, 255)),
+    ("Purple", (150, 0, 220)),
+]
+
 # --- Define your devices here. Fill in real ip / device_id / sku once
 # hardware is set up; in MOCK_MODE these values are ignored. ---------------
 DEVICES = [
-    Device("bulb_1", "Living Room Bulb", "lan", ip="192.168.1.50"),
-    Device("bulb_2", "Bedroom Bulb", "lan", ip="192.168.1.51"),
-    Device(
-        "tv_backlight", "TV Backlight", "cloud",
-        device_id="AA:BB:CC:DD:EE:FF:00:11", sku="H6099",
-    ),
-    Device(
-        "plug", "Smart Plug", "cloud",
-        device_id="11:22:33:44:55:66:77:88", sku="H5086",
-        supports_brightness=False, supports_color=False,
-    ),
+    Device("bulb_1", "Office Light", "lan", ip="192.168.68.69"),
+    # Device("bulb_2", "Den Light", "lan", ip="192.168.1.51"),
+    # Device(
+    #     "tv_backlight", "TV Backlight", "cloud",
+    #     device_id="AA:BB:CC:DD:EE:FF:00:11", sku="H6099",
+    # ),
+    # Device(
+    #     "plug", "Smart Plug", "cloud",
+    #     device_id="11:22:33:44:55:66:77:88", sku="H5086",
+    #     supports_brightness=False, supports_color=False,
+    # ),
 ]
 
 
@@ -65,6 +79,14 @@ class DeviceTile(BoxLayout):
             self.brightness_slider = None
             self._slider_dragging = False
 
+        if device.supports_color:
+            color_row = BoxLayout(orientation="horizontal", size_hint_y=0.3, spacing=6)
+            for name, (r, g, b) in COLOR_PRESETS:
+                swatch = Button(background_normal="", background_color=(r / 255, g / 255, b / 255, 1))
+                swatch.bind(on_release=lambda _btn, rgb=(r, g, b): self._on_color_tap(rgb))
+                color_row.add_widget(swatch)
+            self.add_widget(color_row)
+
     def _on_toggle(self, *_args):
         online, on, brightness, color = self.manager.get_state(self.device.id)
         if not online:
@@ -76,6 +98,10 @@ class DeviceTile(BoxLayout):
 
     def _on_brightness_change(self, _slider, value):
         self.manager.set_brightness(self.device.id, int(value))
+
+    def _on_color_tap(self, rgb):
+        r, g, b = rgb
+        self.manager.set_color(self.device.id, r, g, b)
 
     def _on_slider_touch_down(self, slider, touch):
         if slider.collide_point(*touch.pos):
